@@ -1,0 +1,1331 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Triangle Design with 3D Preview</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Overpass+Mono:wght@300;400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Helvetica+Neue:wght@300;400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script src="https://unpkg.com/osmtogeojson@latest/osmtogeojson.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
+    <style>
+      /* General Styles */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        height: 100vh;
+        background-color: white;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        font-family: "Overpass Mono", monospace;
+      }
+      /* Pages */
+      .page {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: white;
+        z-index: 1000;
+      }
+      #mainPage {
+        display: block;
+        z-index: 1;
+      }
+      /* Triangle Background */
+      .triangle {
+        width: 0;
+        height: 0;
+        border-style: solid;
+        border-width: 100vh 100vw 0 0;
+        border-color: #ffea99 transparent transparent transparent;
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 1;
+        filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.25));
+      }
+      /* Location Button */
+      .location-button {
+        position: absolute;
+        bottom: 30px;
+        right: 30px;
+        background-color: black;
+        color: white;
+        padding: 16px 32px;
+        border: none;
+        border-radius: 8px;
+        font-size: 18px;
+        font-weight: 300;
+        cursor: pointer;
+        z-index: 2;
+        transition: all 0.3s ease;
+        white-space: nowrap;
+      }
+      .location-button:hover {
+        background-color: #333;
+        transform: translateY(-2px);
+      }
+      /* Main Text */
+      .main-text {
+        position: absolute;
+        top: 20%;
+        left: 15%;
+        z-index: 2;
+        font-size: 3.5rem;
+        line-height: 1.2;
+        color: black;
+        font-family: "Overpass Mono", monospace;
+        font-weight: 400;
+        white-space: nowrap;
+      }
+      .helvetica-text {
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        font-weight: 700;
+      }
+      .indent-right {
+        margin-left: 2rem;
+      }
+      /* Background Text Pattern */
+      .background-text {
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 1;
+        color: rgba(0, 0, 0, 0.02);
+        font-family: "Overpass Mono", monospace;
+        font-weight: 600;
+        user-select: none;
+        pointer-events: none;
+        font-size: 3.5rem;
+        line-height: 1.6;
+        width: 100%;
+        height: 100vh;
+        overflow: hidden;
+        clip-path: polygon(0 0, 100% 0, 0 100%);
+      }
+      /* Common Header for Map and Preview */
+      .page-header {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 80px;
+        background: #f8f9fa;
+        border-bottom: 1px solid #e9ecef;
+        z-index: 1001;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 30px;
+      }
+      .back-button,
+      .download-button {
+        background: none;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        padding: 8px 12px;
+        font-size: 14px;
+        cursor: pointer;
+        color: #333;
+        font-family: "Overpass Mono", monospace;
+        transition: all 0.3s ease;
+      }
+      .back-button:hover,
+      .download-button:hover {
+        background-color: #e9ecef;
+        color: #000;
+      }
+      .page-title {
+        font-family: "Overpass Mono", monospace;
+        font-size: 24px;
+        font-weight: 400;
+        margin: 0;
+        color: #333;
+        text-align: center;
+        flex-grow: 1;
+      }
+      .header-controls {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+      }
+      .color-swatches {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .swatch {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        cursor: pointer;
+        border: 2px solid #fff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        transition: transform 0.2s ease;
+      }
+      .swatch:hover {
+        transform: scale(1.1);
+      }
+      .swatch-reset {
+        font-size: 24px;
+        font-weight: bold;
+        color: #888;
+        cursor: pointer;
+        transition: color 0.2s ease;
+      }
+      .swatch-reset:hover {
+        color: #333;
+      }
+      /* Map Page Styles */
+      .map-container {
+        position: absolute;
+        top: 80px;
+        left: 0;
+        right: 0;
+        bottom: 100px;
+        z-index: 1000;
+      }
+      #map {
+        width: 100%;
+        height: 100%;
+      }
+      .map-overlay {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 200px;
+        height: 200px;
+        transform: translate(-50%, -50%);
+        border: 3px solid #8000ff;
+        background: rgba(68, 68, 255, 0.1);
+        pointer-events: none;
+        z-index: 1001;
+        box-shadow: 0 0 20px rgba(68, 68, 255, 0.3);
+      }
+      .map-controls {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 100px;
+        background: #f8f9fa;
+        border-top: 1px solid #e9ecef;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 30px;
+        z-index: 1001;
+      }
+      .confirm-button {
+        background-color: black;
+        color: white;
+        padding: 16px 32px;
+        border: none;
+        border-radius: 8px;
+        font-size: 18px;
+        font-weight: 300;
+        cursor: pointer;
+        font-family: "Overpass Mono", monospace;
+        transition: all 0.3s ease;
+      }
+      .confirm-button:disabled {
+        background-color: #555;
+        cursor: not-allowed;
+      }
+      .confirm-button:hover:not(:disabled) {
+        background-color: #333;
+        transform: translateY(-2px);
+      }
+      .selected-location {
+        margin-right: 20px;
+        font-family: "Overpass Mono", monospace;
+        color: #666;
+        font-size: 14px;
+      }
+      .instruction-text {
+        position: absolute;
+        top: 100px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(255, 255, 255, 0.95);
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-family: "Overpass Mono", monospace;
+        font-size: 14px;
+        color: #333;
+        z-index: 1001;
+        text-align: center;
+        border: 1px solid #e9ecef;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      /* 3D Preview Page Styles */
+      #previewContainer {
+        position: absolute;
+        top: 120px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #e0e0e0;
+      }
+      #previewContainer canvas {
+        display: block;
+      }
+      #previewPage .page-header {
+        height: auto;
+        padding: 15px 30px;
+        flex-direction: column;
+        justify-content: center;
+        gap: 15px;
+      }
+      #previewPage .page-title {
+        flex-grow: 0;
+      }
+      #previewPage .back-button {
+        position: absolute;
+        left: 30px;
+        top: 50%;
+        transform: translateY(-50%);
+      }
+      /* Custom Message Box Styles */
+      .message-box-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 2000;
+        justify-content: center;
+        align-items: center;
+      }
+      .message-box-content {
+        background: white;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+        max-width: 400px;
+        text-align: center;
+        font-family: "Overpass Mono", monospace;
+        color: #333;
+        position: relative;
+        animation: fadeIn 0.3s ease-out;
+      }
+      .message-box-content h3 {
+        margin-top: 0;
+        margin-bottom: 15px;
+        font-size: 20px;
+        color: #000;
+      }
+      .message-box-content p {
+        margin-bottom: 25px;
+        line-height: 1.5;
+        font-size: 15px;
+      }
+      .message-box-content button {
+        background-color: black;
+        color: white;
+        padding: 12px 25px;
+        border: none;
+        border-radius: 6px;
+        font-size: 16px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+      .message-box-content button:hover {
+        background-color: #333;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: scale(0.9);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+      /* Loading Indicator Styles */
+      .loading-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.8);
+        z-index: 3000;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+        color: #333;
+        font-family: "Overpass Mono", monospace;
+      }
+      .spinner {
+        width: 60px;
+        height: 60px;
+        border: 6px solid rgba(0, 0, 0, 0.1);
+        border-radius: 50%;
+        border-top-color: #333;
+        animation: spin 1s ease-in-out infinite;
+        margin-bottom: 20px;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      /* Mobile responsive styles */
+      @media (max-width: 768px) {
+        .triangle {
+          border-width: 0;
+          width: 100vw;
+          height: 100vw;
+          max-height: 100vh;
+          background-color: #ffea99;
+          border-radius: 0;
+        }
+        .main-text {
+          position: absolute;
+          top: 50vw;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          font-size: 2.2rem;
+          max-width: 80%;
+          text-align: center;
+        }
+        .location-button {
+          left: 50%;
+          transform: translateX(-50%);
+        }
+        .background-text {
+          width: 100vw;
+          height: 100vw;
+          max-height: 100vh;
+          clip-path: inset(0 0 0 0);
+        }
+        .page-header {
+          padding: 0 15px;
+          flex-wrap: wrap;
+          height: auto;
+          min-height: 80px;
+          justify-content: center;
+          gap: 10px;
+        }
+        .page-title {
+          font-size: 18px;
+          order: -1;
+          width: 100%;
+          padding-top: 10px;
+        }
+        .map-controls {
+          flex-direction: column;
+          gap: 10px;
+        }
+        .map-overlay {
+          width: 150px;
+          height: 150px;
+        }
+        .instruction-text {
+          font-size: 12px;
+          padding: 8px 16px;
+          top: 120px;
+        }
+        .header-controls {
+          gap: 10px;
+          flex-wrap: wrap;
+          justify-content: center;
+        }
+        .swatch {
+          width: 24px;
+          height: 24px;
+        }
+        #previewPage .page-header {
+          padding-top: 15px;
+          padding-bottom: 15px;
+        }
+        #previewPage .back-button {
+          position: static;
+          order: 1;
+        }
+        #previewContainer {
+          top: 180px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Main landing page -->
+    <div id="mainPage" class="page" style="display: block">
+      <div class="triangle"></div>
+      <div class="background-text">
+        um pedaço do mundo que cabe na mão um pedaço do mundo que cabe na mão um
+        pedaço do mundo que cabe na mão um pedaço do mundo que cabe na mão um
+        pedaço do mundo que cabe na mão um pedaço do mundo que cabe na mão um
+        pedaço do mundo que cabe na mão um pedaço do mundo que cabe na mão um
+        pedaço do mundo que cabe na mão um pedaço do mundo que cabe na mão um
+        pedaço do mundo que cabe na mão um pedaço do mundo que cabe na mão um
+        pedaço do mundo que cabe na mão um pedaço do mundo que cabe na mão um
+        pedaço do mundo que cabe na mão um pedaço do mundo que cabe na mão
+      </div>
+      <div class="main-text">
+        um pedaço do<br />
+        <span class="helvetica-text">mundo</span> que<br />
+        cabe na<br />
+        <span class="helvetica-text indent-right">mão</span>
+      </div>
+      <button class="location-button" onclick="showMapPage()">
+        selecionar localização ->
+      </button>
+    </div>
+
+    <!-- Map selection page -->
+    <div id="mapPage" class="page">
+      <div class="page-header">
+        <button class="back-button" onclick="goBackToMain()">voltar</button>
+        <h1 class="page-title">selecionar localização</h1>
+        <div style="width: 80px"></div>
+      </div>
+      <div class="instruction-text">
+        posicione o local desejado dentro do quadrado
+      </div>
+      <div class="map-container">
+        <div id="map"></div>
+        <div class="map-overlay"></div>
+      </div>
+      <div class="map-controls">
+        <div class="selected-location" id="selectedLocation">
+          posicione o quadrado e confirme a localização
+        </div>
+        <button
+          class="confirm-button"
+          id="confirmButton"
+          onclick="confirmLocation()"
+        >
+          confirmar localização
+        </button>
+      </div>
+    </div>
+
+    <!-- 3D Preview Page with updated header structure -->
+    <div id="previewPage" class="page">
+      <div class="page-header">
+        <button class="back-button" onclick="goBackToMap()">
+          ← outro local
+        </button>
+        <h1 class="page-title">pré-visualização 3D</h1>
+        <div class="header-controls">
+          <div class="color-swatches">
+            <div
+              class="swatch"
+              style="background-color: #d2b48c"
+              onclick="changeModelColor(0xd2b48c)"
+            ></div>
+            <div
+              class="swatch"
+              style="background-color: #8fbc8f"
+              onclick="changeModelColor(0x8fbc8f)"
+            ></div>
+            <div
+              class="swatch"
+              style="background-color: #add8e6"
+              onclick="changeModelColor(0xadd8e6)"
+            ></div>
+            <div class="swatch-reset" onclick="resetModelColor()">×</div>
+          </div>
+          <button class="download-button" onclick="downloadSTL()">
+            Download STL
+          </button>
+        </div>
+      </div>
+      <div id="previewContainer"></div>
+    </div>
+
+    <!-- Custom message box for alerts -->
+    <div id="messageBoxOverlay" class="message-box-overlay">
+      <div class="message-box-content">
+        <h3 id="messageBoxTitle"></h3>
+        <p id="messageBoxText"></p>
+        <button onclick="hideMessageBox()">OK</button>
+      </div>
+    </div>
+
+    <!-- Loading overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+      <div class="spinner"></div>
+      <p>Buscando dados e construindo o modelo 3D...</p>
+    </div>
+
+    <script>
+      // --- Global State ---
+      let map;
+      let selectedBounds = null;
+      let geoJsonData = null;
+      let three = {
+        renderer: null,
+        scene: null,
+        camera: null,
+        controls: null,
+        animationFrameId: null,
+        light: null,
+      };
+      const originalColors = new Map();
+
+      // --- Page Navigation ---
+      function showPage(pageId) {
+        document
+          .querySelectorAll(".page")
+          .forEach((p) => (p.style.display = "none"));
+        document.getElementById(pageId).style.display = "block";
+      }
+
+      function showMapPage() {
+        showPage("mapPage");
+        setTimeout(() => initializeMap(), 100);
+      }
+
+      function showPreviewPage() {
+        showPage("previewPage");
+        setTimeout(() => init3DPreview(), 100);
+      }
+
+      function goBackToMain() {
+        showPage("mainPage");
+        if (map) {
+          map.remove();
+          map = null;
+        }
+      }
+
+      function goBackToMap() {
+        showPage("mapPage");
+        destroy3DPreview();
+        setTimeout(() => initializeMap(), 100);
+      }
+
+      // --- Message & Loading ---
+      function showMessageBox(title, message) {
+        document.getElementById("messageBoxTitle").textContent = title;
+        document.getElementById("messageBoxText").textContent = message;
+        document.getElementById("messageBoxOverlay").style.display = "flex";
+      }
+
+      function hideMessageBox() {
+        document.getElementById("messageBoxOverlay").style.display = "none";
+      }
+
+      function showLoader(show) {
+        document.getElementById("loadingOverlay").style.display = show
+          ? "flex"
+          : "none";
+      }
+
+      // --- Map Logic (Leaflet) ---
+      function initializeMap() {
+        if (map) map.remove();
+        map = L.map("map").setView([-30.0346, -51.2177], 13);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: "© OpenStreetMap contributors",
+        }).addTo(map);
+        map.on("moveend", updateSelectedBounds);
+        map.on("zoomend", updateSelectedBounds);
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) =>
+              map.setView([pos.coords.latitude, pos.coords.longitude], 17),
+            () => updateSelectedBounds(),
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+          );
+        } else {
+          updateSelectedBounds();
+        }
+      }
+
+      function updateSelectedBounds() {
+        if (!map) return;
+        const mapContainer = document.getElementById("map");
+        const overlay = document.querySelector(".map-overlay");
+        const containerRect = mapContainer.getBoundingClientRect();
+        const overlayRect = overlay.getBoundingClientRect();
+        const topLeftPoint = L.point(
+          overlayRect.left - containerRect.left,
+          overlayRect.top - containerRect.top
+        );
+        const bottomRightPoint = L.point(
+          overlayRect.right - containerRect.left,
+          overlayRect.bottom - containerRect.top
+        );
+        selectedBounds = {
+          topLeft: map.containerPointToLatLng(topLeftPoint),
+          bottomRight: map.containerPointToLatLng(bottomRightPoint),
+          center: map.getCenter(),
+        };
+        updateLocationDisplay();
+      }
+
+      function updateLocationDisplay() {
+        const locationDiv = document.getElementById("selectedLocation");
+        if (selectedBounds) {
+          const center = selectedBounds.center;
+          locationDiv.textContent = `${center.lat.toFixed(
+            4
+          )}, ${center.lng.toFixed(4)}`;
+        }
+      }
+
+      function confirmLocation() {
+        if (!selectedBounds) return;
+        const confirmButton = document.getElementById("confirmButton");
+        showLoader(true);
+        confirmButton.disabled = true;
+        confirmButton.textContent = "carregando...";
+        const { topLeft, bottomRight } = selectedBounds;
+        const overpassQuery = `
+        [out:json][timeout:25];
+        (
+          way["building"](${bottomRight.lat},${topLeft.lng},${topLeft.lat},${bottomRight.lng});
+          relation["building"](${bottomRight.lat},${topLeft.lng},${topLeft.lat},${bottomRight.lng});
+          way["highway"](${bottomRight.lat},${topLeft.lng},${topLeft.lat},${bottomRight.lng});
+        );
+        out geom;
+      `;
+        fetch("https://overpass-api.de/api/interpreter", {
+          method: "POST",
+          body: `data=${encodeURIComponent(overpassQuery)}`,
+        })
+          .then((response) => {
+            if (!response.ok)
+              throw new Error(`Erro na API Overpass: ${response.status}`);
+            return response.json();
+          })
+          .then((data) => {
+            geoJsonData = osmtogeojson(data);
+            if (geoJsonData.features.length === 0) {
+              showMessageBox(
+                "Nenhum Dado Encontrado",
+                "Não foram encontrados edifícios ou ruas na área selecionada. Por favor, tente uma localização diferente."
+              );
+              throw new Error("No features found");
+            }
+            showPreviewPage();
+          })
+          .catch((error) => {
+            console.error("Erro ao buscar dados:", error);
+            if (!error.message.includes("No features found")) {
+              showMessageBox(
+                "Erro",
+                `Falha ao buscar dados: ${error.message}.`
+              );
+            }
+          })
+          .finally(() => {
+            showLoader(false);
+            confirmButton.disabled = false;
+            confirmButton.textContent = "confirmar localização";
+          });
+      }
+
+      // --- 3D Preview Logic (Three.js) ---
+      function init3DPreview() {
+        if (!geoJsonData || three.renderer) return;
+        const container = document.getElementById("previewContainer");
+        three.scene = new THREE.Scene();
+        three.scene.background = new THREE.Color(0xddeeff);
+        const aspect = container.clientWidth / container.clientHeight;
+        three.camera = new THREE.PerspectiveCamera(50, aspect, 1, 5000);
+        three.camera.position.set(0, 400, 350);
+        three.camera.lookAt(three.scene.position);
+        three.scene.add(three.camera);
+        const corner1 = latLonToVector3(
+          selectedBounds.topLeft.lat,
+          selectedBounds.topLeft.lng,
+          selectedBounds.center
+        );
+        const corner2 = latLonToVector3(
+          selectedBounds.bottomRight.lat,
+          selectedBounds.bottomRight.lng,
+          selectedBounds.center
+        );
+        const worldWidth = Math.abs(corner1.x - corner2.x);
+        const worldDepth = Math.abs(corner1.z - corner2.z);
+        three.renderer = new THREE.WebGLRenderer({
+          antialias: true,
+          preserveDrawingBuffer: true,
+        });
+        three.renderer.setSize(container.clientWidth, container.clientHeight);
+        three.renderer.setPixelRatio(window.devicePixelRatio);
+        three.renderer.shadowMap.enabled = true;
+        container.appendChild(three.renderer.domElement);
+
+        three.controls = new THREE.OrbitControls(
+          three.camera,
+          three.renderer.domElement
+        );
+        three.controls.enableDamping = true;
+        three.controls.dampingFactor = 0.1;
+        three.controls.target.set(0, 0, 0);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        three.scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        directionalLight.position.set(200, 350, 250);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+        directionalLight.shadow.bias = -0.0005;
+        const shadowCamSize = Math.max(worldWidth, worldDepth) * 2;
+        directionalLight.shadow.camera.left = -shadowCamSize;
+        directionalLight.shadow.camera.right = shadowCamSize;
+        directionalLight.shadow.camera.top = shadowCamSize;
+        directionalLight.shadow.camera.bottom = -shadowCamSize;
+        directionalLight.shadow.camera.near = 10;
+        directionalLight.shadow.camera.far = 10000;
+        three.light = directionalLight;
+        three.camera.add(directionalLight);
+        three.camera.add(directionalLight.target);
+
+        const plateThickness = 10;
+        const plateWidth = worldWidth;
+        const plateDepth = worldDepth;
+
+        const groundMaterial = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          roughness: 1.0,
+          metalness: 0,
+        });
+        const ground = new THREE.Mesh(
+          new THREE.BoxGeometry(plateWidth, plateThickness, plateDepth),
+          groundMaterial
+        );
+        ground.position.y = -plateThickness / 2;
+        ground.receiveShadow = true;
+        ground.userData.isModelPart = true;
+        three.scene.add(ground);
+        originalColors.set(ground, ground.material.color.getHex());
+
+        const clipBounds = {
+          minX: -worldWidth / 2,
+          maxX: worldWidth / 2,
+          minZ: -worldDepth / 2,
+          maxZ: worldDepth / 2,
+        };
+        const maxHeight = drawFeatures(clipBounds);
+
+        const wallThickness = 8;
+        const wallHeight = maxHeight + plateThickness;
+        const wallYPosition = wallHeight / 2 - plateThickness;
+
+        const wallMaterial = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          roughness: 1.0,
+          metalness: 0,
+        });
+        const walls = [];
+        const frontWall = new THREE.Mesh(
+          new THREE.BoxGeometry(
+            plateWidth + wallThickness * 2,
+            wallHeight,
+            wallThickness
+          ),
+          wallMaterial.clone()
+        );
+        frontWall.position.set(
+          0,
+          wallYPosition,
+          plateDepth / 2 + wallThickness / 2
+        );
+        const backWall = new THREE.Mesh(
+          new THREE.BoxGeometry(
+            plateWidth + wallThickness * 2,
+            wallHeight,
+            wallThickness
+          ),
+          wallMaterial.clone()
+        );
+        backWall.position.set(
+          0,
+          wallYPosition,
+          -(plateDepth / 2) - wallThickness / 2
+        );
+        const leftWall = new THREE.Mesh(
+          new THREE.BoxGeometry(wallThickness, wallHeight, plateDepth),
+          wallMaterial.clone()
+        );
+        leftWall.position.set(
+          -(plateWidth / 2) - wallThickness / 2,
+          wallYPosition,
+          0
+        );
+        const rightWall = new THREE.Mesh(
+          new THREE.BoxGeometry(wallThickness, wallHeight, plateDepth),
+          wallMaterial.clone()
+        );
+        rightWall.position.set(
+          plateWidth / 2 + wallThickness / 2,
+          wallYPosition,
+          0
+        );
+        walls.push(frontWall, backWall, leftWall, rightWall);
+        walls.forEach((wall) => {
+          wall.receiveShadow = true;
+          wall.userData.isModelPart = true;
+          three.scene.add(wall);
+          originalColors.set(wall, wall.material.color.getHex());
+        });
+        window.addEventListener("resize", onWindowResize);
+        animate3D();
+      }
+
+      function destroy3DPreview() {
+        if (three.animationFrameId)
+          cancelAnimationFrame(three.animationFrameId);
+        if (three.renderer) {
+          three.renderer.domElement.remove();
+          three.renderer.dispose();
+        }
+        window.removeEventListener("resize", onWindowResize);
+        three = {
+          renderer: null,
+          scene: null,
+          camera: null,
+          controls: null,
+          animationFrameId: null,
+          light: null,
+        };
+        geoJsonData = null;
+        originalColors.clear();
+      }
+
+      function onWindowResize() {
+        const container = document.getElementById("previewContainer");
+        if (!three.renderer || !container) return;
+        three.camera.aspect = container.clientWidth / container.clientHeight;
+        three.camera.updateProjectionMatrix();
+        three.renderer.setSize(container.clientWidth, container.clientHeight);
+      }
+
+      function animate3D() {
+        three.animationFrameId = requestAnimationFrame(animate3D);
+        three.controls.update();
+        three.renderer.render(three.scene, three.camera);
+      }
+
+      function latLonToVector3(lat, lon, center) {
+        const R = 6371e3;
+        const phi = (lat * Math.PI) / 180;
+        const centerPhi = (center.lat * Math.PI) / 180;
+        const deltaLambda = ((lon - center.lng) * Math.PI) / 180;
+        const x = R * deltaLambda * Math.cos(centerPhi);
+        const z = R * (phi - centerPhi);
+        return new THREE.Vector3(x, 0, -z);
+      }
+
+      function drawFeatures(clipBounds) {
+        const center = selectedBounds.center;
+        let maxHeight = 0;
+        const buildingMaterial = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          roughness: 1.0,
+          metalness: 0,
+          side: THREE.DoubleSide,
+          polygonOffset: true,
+          polygonOffsetFactor: -1.0,
+          polygonOffsetUnits: -1.0,
+        });
+        const streetMaterial = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          roughness: 1.0,
+          metalness: 0,
+          polygonOffset: true,
+          polygonOffsetFactor: -0.5,
+          polygonOffsetUnits: -1.0,
+        });
+        geoJsonData.features.forEach((feature) => {
+          if (feature.geometry) {
+            if (feature.properties.building) {
+              const material = buildingMaterial.clone();
+              if (feature.geometry.type === "Polygon") {
+                const { mesh, height } = processPolygon(
+                  feature.geometry.coordinates,
+                  feature.properties,
+                  center,
+                  material,
+                  clipBounds
+                );
+                if (mesh) maxHeight = Math.max(maxHeight, height);
+              } else if (feature.geometry.type === "MultiPolygon") {
+                feature.geometry.coordinates.forEach((polygonCoords) => {
+                  const { mesh, height } = processPolygon(
+                    polygonCoords,
+                    feature.properties,
+                    center,
+                    material,
+                    clipBounds
+                  );
+                  if (mesh) maxHeight = Math.max(maxHeight, height);
+                });
+              }
+            } else if (
+              feature.properties.highway &&
+              feature.geometry.type === "LineString"
+            ) {
+              processLineString(
+                feature.geometry.coordinates,
+                center,
+                streetMaterial,
+                clipBounds
+              );
+            }
+          }
+        });
+        return maxHeight;
+      }
+
+      function processPolygon(
+        polygonCoords,
+        properties,
+        center,
+        material,
+        clipBounds
+      ) {
+        const shapePoints = [];
+        polygonCoords[0].forEach((p) => {
+          const vec = latLonToVector3(p[1], p[0], center);
+          shapePoints.push(new THREE.Vector2(vec.x, -vec.z));
+        });
+
+        const clippedShapePoints = clipPolygon(
+          shapePoints,
+          clipBounds.minX,
+          clipBounds.maxX,
+          clipBounds.minZ,
+          clipBounds.maxZ
+        );
+
+        if (clippedShapePoints.length < 3) {
+          return { mesh: null, height: 0 };
+        }
+
+        const shape = new THREE.Shape(clippedShapePoints);
+        const MIN_BUILDING_HEIGHT = 12;
+        const MAX_BUILDING_HEIGHT = 20;
+        let height = 15;
+        if (properties["building:levels"]) {
+          height = properties["building:levels"] * 3.5;
+        } else if (properties.height) {
+          height = parseFloat(properties.height) || 15;
+        }
+        height = Math.max(
+          MIN_BUILDING_HEIGHT,
+          Math.min(height, MAX_BUILDING_HEIGHT)
+        );
+        const extrudeSettings = {
+          steps: 1,
+          depth: height,
+          bevelEnabled: false,
+        };
+        const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.position.y = 0;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.userData.isModelPart = true;
+        three.scene.add(mesh);
+        originalColors.set(mesh, mesh.material.color.getHex());
+        return { mesh, height };
+      }
+
+      // --- FIX: Replaced road geometry logic to ensure flat tops ---
+      function processLineString(lineCoords, center, material, clipBounds) {
+        const points = lineCoords.map((p) =>
+          latLonToVector3(p[1], p[0], center)
+        );
+        if (points.length < 2) return null;
+
+        const clippedSegments = clipPolyline(
+          points,
+          clipBounds.minX,
+          clipBounds.maxX,
+          clipBounds.minZ,
+          clipBounds.maxZ
+        );
+        if (clippedSegments.length === 0) return null;
+
+        const streetGroup = new THREE.Group();
+        streetGroup.userData.isModelPart = true;
+
+        const streetWidth = 6;
+        // --- CHANGE: Increased street height for better visibility ---
+        const streetHeight = 2.0;
+
+        const extrudeSettings = {
+          steps: 1,
+          depth: streetHeight,
+          bevelEnabled: false,
+        };
+
+        clippedSegments.forEach((segmentPoints) => {
+          if (segmentPoints.length < 2) return;
+
+          for (let i = 0; i < segmentPoints.length - 1; i++) {
+            const p1 = segmentPoints[i];
+            const p2 = segmentPoints[i + 1];
+
+            // Create a rectangle shape for this segment
+            const dir = p2.clone().sub(p1).normalize();
+            const perpendicular = new THREE.Vector3(
+              -dir.z,
+              0,
+              dir.x
+            ).multiplyScalar(streetWidth / 2);
+
+            const v1 = p1.clone().add(perpendicular);
+            const v2 = p1.clone().sub(perpendicular);
+            const v3 = p2.clone().sub(perpendicular);
+            const v4 = p2.clone().add(perpendicular);
+
+            const shapePoints = [
+              new THREE.Vector2(v1.x, -v1.z),
+              new THREE.Vector2(v2.x, -v2.z),
+              new THREE.Vector2(v3.x, -v3.z),
+              new THREE.Vector2(v4.x, -v4.z),
+            ];
+
+            const shape = new THREE.Shape(shapePoints);
+            const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+            const streetMesh = new THREE.Mesh(geometry, material.clone());
+
+            streetMesh.rotation.x = -Math.PI / 2;
+            streetMesh.position.y = streetHeight;
+
+            streetMesh.receiveShadow = true;
+            streetMesh.userData.isModelPart = true;
+            streetGroup.add(streetMesh);
+          }
+        });
+
+        if (streetGroup.children.length > 0) {
+          three.scene.add(streetGroup);
+          streetGroup.children.forEach((child) => {
+            originalColors.set(child, child.material.color.getHex());
+          });
+          return streetGroup;
+        }
+        return null;
+      }
+
+      // --- Geometry Clipping Functions ---
+      function clipPolygon(subjectPolygon, minX, maxX, minY, maxY) {
+        let outputList = subjectPolygon;
+        const clipEdges = [
+          { axis: "y", val: minY, dir: -1 },
+          { axis: "x", val: maxX, dir: 1 },
+          { axis: "y", val: maxY, dir: 1 },
+          { axis: "x", val: minX, dir: -1 },
+        ];
+
+        for (const edge of clipEdges) {
+          const inputList = outputList;
+          outputList = [];
+          if (inputList.length === 0) break;
+
+          let S = inputList[inputList.length - 1];
+          for (let i = 0; i < inputList.length; i++) {
+            let E = inputList[i];
+            const s_inside = S[edge.axis] * edge.dir <= edge.val * edge.dir;
+            const e_inside = E[edge.axis] * edge.dir <= edge.val * edge.dir;
+
+            if (e_inside) {
+              if (!s_inside) {
+                outputList.push(getIntersection(S, E, edge));
+              }
+              outputList.push(E);
+            } else if (s_inside) {
+              outputList.push(getIntersection(S, E, edge));
+            }
+            S = E;
+          }
+        }
+        return outputList;
+
+        function getIntersection(S, E, edge) {
+          const dx = E.x - S.x;
+          const dy = E.y - S.y;
+          const t =
+            edge.axis === "x" ? (edge.val - S.x) / dx : (edge.val - S.y) / dy;
+          return new THREE.Vector2(S.x + t * dx, S.y + t * dy);
+        }
+      }
+
+      function clipPolyline(polyline, minX, maxX, minZ, maxZ) {
+        const INSIDE = 0,
+          LEFT = 1,
+          RIGHT = 2,
+          BOTTOM = 4,
+          TOP = 8;
+        const computeOutCode = (p) => {
+          let code = INSIDE;
+          if (p.x < minX) code |= LEFT;
+          else if (p.x > maxX) code |= RIGHT;
+          if (p.z < minZ) code |= BOTTOM;
+          else if (p.z > maxZ) code |= TOP;
+          return code;
+        };
+
+        const clippedPolylines = [];
+        let currentSegment = [];
+
+        for (let i = 0; i < polyline.length - 1; i++) {
+          let p1 = polyline[i].clone();
+          let p2 = polyline[i + 1].clone();
+          let outcode1 = computeOutCode(p1);
+          let outcode2 = computeOutCode(p2);
+          let accept = false;
+
+          while (true) {
+            if (!(outcode1 | outcode2)) {
+              accept = true;
+              break;
+            } else if (outcode1 & outcode2) {
+              break;
+            } else {
+              let x, z;
+              const outcodeOut = outcode1 || outcode2;
+              if (outcodeOut & TOP) {
+                x = p1.x + ((p2.x - p1.x) * (maxZ - p1.z)) / (p2.z - p1.z);
+                z = maxZ;
+              } else if (outcodeOut & BOTTOM) {
+                x = p1.x + ((p2.x - p1.x) * (minZ - p1.z)) / (p2.z - p1.z);
+                z = minZ;
+              } else if (outcodeOut & RIGHT) {
+                z = p1.z + ((p2.z - p1.z) * (maxX - p1.x)) / (p2.x - p1.x);
+                x = maxX;
+              } else if (outcodeOut & LEFT) {
+                z = p1.z + ((p2.z - p1.z) * (minX - p1.x)) / (p2.x - p1.x);
+                x = minX;
+              }
+              if (outcodeOut === outcode1) {
+                p1.x = x;
+                p1.z = z;
+                outcode1 = computeOutCode(p1);
+              } else {
+                p2.x = x;
+                p2.z = z;
+                outcode2 = computeOutCode(p2);
+              }
+            }
+          }
+
+          if (accept) {
+            if (
+              currentSegment.length > 0 &&
+              !currentSegment[currentSegment.length - 1].equals(p1)
+            ) {
+              clippedPolylines.push(currentSegment);
+              currentSegment = [];
+            }
+            if (currentSegment.length === 0) currentSegment.push(p1);
+            currentSegment.push(p2);
+          } else {
+            if (currentSegment.length > 0) {
+              clippedPolylines.push(currentSegment);
+              currentSegment = [];
+            }
+          }
+        }
+        if (currentSegment.length > 0) clippedPolylines.push(currentSegment);
+        return clippedPolylines;
+      }
+
+      // --- Feature Functions ---
+      function downloadSTL() {
+        if (!three.scene) {
+          showMessageBox("Erro", "A cena 3D não foi carregada.");
+          return;
+        }
+        const exporter = new THREE.STLExporter();
+        const result = exporter.parse(three.scene, { binary: false });
+        const blob = new Blob([result], { type: "text/plain" });
+        const link = document.createElement("a");
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.href = URL.createObjectURL(blob);
+        link.download = "modelo-3d.stl";
+        link.click();
+        URL.revokeObjectURL(link.href);
+        document.body.removeChild(link);
+      }
+
+      function changeModelColor(color) {
+        if (!three.scene) return;
+        three.scene.traverse((object) => {
+          if (
+            (object.isMesh || object.isGroup) &&
+            object.userData.isModelPart
+          ) {
+            if (object.isMesh) {
+              if (!originalColors.has(object)) {
+                originalColors.set(object, object.material.color.getHex());
+              }
+              object.material.color.set(color);
+            } else if (object.isGroup) {
+              // Handle streets which are groups
+              object.children.forEach((child) => {
+                if (child.isMesh) {
+                  if (!originalColors.has(child)) {
+                    originalColors.set(child, child.material.color.getHex());
+                  }
+                  child.material.color.set(color);
+                }
+              });
+            }
+          }
+        });
+      }
+
+      function resetModelColor() {
+        if (!three.scene) return;
+        three.scene.traverse((object) => {
+          if (
+            (object.isMesh || object.isGroup) &&
+            object.userData.isModelPart
+          ) {
+            if (object.isMesh && originalColors.has(object)) {
+              object.material.color.setHex(originalColors.get(object));
+            } else if (object.isGroup) {
+              object.children.forEach((child) => {
+                if (child.isMesh && originalColors.has(child)) {
+                  child.material.color.setHex(originalColors.get(child));
+                }
+              });
+            }
+          }
+        });
+      }
+
+      // Initial setup
+      window.onload = () => showPage("mainPage");
+    </script>
+  </body>
+</html>
