@@ -1,0 +1,566 @@
+/* General Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  height: 100vh;
+  background-color: white;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-family: "Overpass Mono", monospace;
+}
+
+/* Pages */
+.page {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: white;
+  z-index: 1000;
+}
+
+#mainPage {
+  display: block;
+  z-index: 1;
+}
+
+/* Triangle Background */
+.triangle {
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 100vh 100vw 0 0;
+  border-color: #ffea99 transparent transparent transparent;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.25));
+}
+
+/* Location Button */
+.location-button {
+  position: absolute;
+  bottom: 30px;
+  right: 30px;
+  background-color: black;
+  color: white;
+  padding: 16px 32px;
+  border: none;
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: 300;
+  cursor: pointer;
+  z-index: 2;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  font-family: "Overpass Mono", monospace;
+}
+
+.location-button:hover {
+  background-color: #333;
+  transform: translateY(-2px);
+}
+
+/* Main Text */
+.main-text {
+  position: absolute;
+  top: 20%;
+  left: 15%;
+  z-index: 2;
+  font-size: 3.5rem;
+  line-height: 1.2;
+  color: black;
+  font-family: "Overpass Mono", monospace;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.helvetica-text {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 700;
+}
+
+.indent-right {
+  margin-left: 2rem;
+}
+
+/* Background Text Pattern */
+.background-text {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  color: rgba(0, 0, 0, 0.02);
+  font-family: "Overpass Mono", monospace;
+  font-weight: 600;
+  user-select: none;
+  pointer-events: none;
+  font-size: 3.5rem;
+  line-height: 1.6;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+
+/* Common Header for Map and Preview */
+.page-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: auto;
+  /* Adjusted for multiple rows */
+  background: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 30px;
+  gap: 10px;
+}
+
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.back-button,
+.download-button {
+  background: none;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  color: #333;
+  font-family: "Overpass Mono", monospace;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.back-button:hover,
+.download-button:hover {
+  background-color: #e9ecef;
+  color: #000;
+}
+
+.page-title {
+  font-family: "Overpass Mono", monospace;
+  font-size: 24px;
+  font-weight: 400;
+  margin: 0;
+  color: #333;
+  text-align: center;
+  flex-grow: 1;
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.color-swatches {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+}
+
+.swatch:hover {
+  transform: scale(1.1);
+}
+
+.swatch-reset {
+  font-size: 24px;
+  font-weight: bold;
+  color: #888;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.swatch-reset:hover {
+  color: #333;
+}
+
+/* Map Page Styles */
+#mapPage .page-header {
+  flex-direction: row;
+  height: 80px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.map-search-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-grow: 1;
+  justify-content: center;
+}
+
+#mapSearchInput {
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-family: "Overpass Mono", monospace;
+  font-size: 14px;
+  width: 250px;
+}
+
+#mapSearchButton {
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-family: "Overpass Mono", monospace;
+}
+
+#mapSearchButton:hover {
+  background: #e9ecef;
+}
+
+.map-container {
+  position: absolute;
+  top: 80px;
+  left: 0;
+  right: 0;
+  bottom: 100px;
+  z-index: 1000;
+}
+
+#map {
+  width: 100%;
+  height: 100%;
+}
+
+.map-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 200px;
+  height: 200px;
+  transform: translate(-50%, -50%);
+  border: 3px solid #8000ff;
+  background: rgba(68, 68, 255, 0.1);
+  pointer-events: none;
+  z-index: 1001;
+  box-shadow: 0 0 20px rgba(68, 68, 255, 0.3);
+}
+
+.map-controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 100px;
+  background: #f8f9fa;
+  border-top: 1px solid #e9ecef;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 30px;
+  z-index: 1001;
+}
+
+.confirm-button {
+  background-color: black;
+  color: white;
+  padding: 16px 32px;
+  border: none;
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: 300;
+  cursor: pointer;
+  font-family: "Overpass Mono", monospace;
+  transition: all 0.3s ease;
+}
+
+.confirm-button:disabled {
+  background-color: #555;
+  cursor: not-allowed;
+}
+
+.confirm-button:hover:not(:disabled) {
+  background-color: #333;
+  transform: translateY(-2px);
+}
+
+.location-display {
+  margin-right: 20px;
+  font-family: "Overpass Mono", monospace;
+  color: #333;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 6px;
+  transition: background-color 0.2s ease;
+}
+
+.location-display:hover {
+  background-color: #e9ecef;
+}
+
+.instruction-text {
+  position: absolute;
+  top: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.95);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-family: "Overpass Mono", monospace;
+  font-size: 14px;
+  color: #333;
+  z-index: 1001;
+  text-align: center;
+  border: 1px solid #e9ecef;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+/* 3D Preview Page Styles */
+#previewContainer {
+  position: absolute;
+  /* The 'top' value is now set dynamically by JavaScript */
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #e0e0e0;
+}
+
+#previewContainer canvas {
+  display: block;
+}
+
+/* Custom Message Box Styles */
+.message-box-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 2000;
+  justify-content: center;
+  align-items: center;
+}
+
+.message-box-content {
+  background: white;
+  padding: 30px;
+  border-radius: 12px;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  max-width: 400px;
+  text-align: center;
+  font-family: "Overpass Mono", monospace;
+  color: #333;
+  position: relative;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.message-box-content h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 20px;
+  color: #000;
+}
+
+.message-box-content p {
+  margin-bottom: 25px;
+  line-height: 1.5;
+  font-size: 15px;
+}
+
+.message-box-content button {
+  background-color: black;
+  color: white;
+  padding: 12px 25px;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  font-family: "Overpass Mono", monospace;
+}
+
+.message-box-content button:hover {
+  background-color: #333;
+}
+
+#coordInput {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 20px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-family: "Overpass Mono", monospace;
+}
+
+.coord-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Loading Indicator Styles */
+.loading-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.8);
+  z-index: 3000;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  color: #333;
+  font-family: "Overpass Mono", monospace;
+}
+
+.spinner {
+  width: 60px;
+  height: 60px;
+  border: 6px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top-color: #333;
+  animation: spin 1s ease-in-out infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Mobile responsive styles */
+@media (max-width: 768px) {
+  .triangle {
+    border-width: 0;
+    width: 100vw;
+    height: 100vw;
+    max-height: 100vh;
+    background-color: #ffea99;
+    border-radius: 0;
+  }
+
+  .main-text {
+    position: absolute;
+    top: 50vw;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 2.2rem;
+    max-width: 80%;
+    text-align: center;
+  }
+
+  .location-button {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .background-text {
+    width: 100vw;
+    height: 100vw;
+    max-height: 100vh;
+    clip-path: inset(0 0 0 0);
+  }
+
+  #mapPage .page-header {
+    padding: 10px 15px;
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 80px;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .map-search-container {
+    order: 1;
+    width: 100%;
+  }
+
+  #mapSearchInput {
+    width: 100%;
+  }
+
+  .page-title {
+    display: none;
+  }
+
+  .map-controls {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .map-overlay {
+    width: 150px;
+    height: 150px;
+  }
+
+  .instruction-text {
+    font-size: 12px;
+    padding: 8px 16px;
+    top: 140px;
+    /* Adjust for taller header on mobile */
+  }
+
+  .map-container {
+    top: 130px;
+    /* Adjust for taller header on mobile */
+  }
+
+  .header-controls {
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .swatch {
+    width: 24px;
+    height: 24px;
+  }
+
+  #previewPage .header-row {
+    flex-direction: column;
+    gap: 15px;
+  }
+}
