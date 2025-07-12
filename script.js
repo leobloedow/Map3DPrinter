@@ -28,14 +28,14 @@ const SELECTION_SIZES = {
   // In degrees latitude
   small: 0.005, // ~550m
   medium: 0.015, // ~1.6km (was 2.2km)
-  large: 0.05, // ~5.5km
+  large: 0.035, // ~3.8km (smaller than before)
 };
 
 // CM size options for each map size
 const CM_SIZE_OPTIONS = {
   small: [5, 10], // P size supports 5x5cm and 10x10cm
-  medium: [5, 10, 20], // M size supports 5x5, 10x10, and 20x20cm
-  large: [10, 20], // G size supports 10x10 and 20x20cm
+  medium: [10, 20], // M size supports 10x10 and 20x20cm
+  large: [20], // G size supports only 20x20cm
 };
 
 let currentSelectionSize = "medium";
@@ -49,7 +49,9 @@ function showPage(pageId) {
 
 function showMapPage() {
   showPage("mapPage");
-  setTimeout(() => initializeMap(), 100);
+  setTimeout(() => {
+    initializeMap();
+  }, 100);
 }
 
 function showPreviewPage() {
@@ -204,7 +206,7 @@ function initializeMap() {
       if (availableSizes && availableSizes.length > 0) {
         currentCmSize = availableSizes[0];
       }
-      
+
       updateSelectionArea();
     });
   });
