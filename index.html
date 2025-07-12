@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Triangle Design with 3D Preview</title>
+    <title>Map 3D Printer</title>
     <link
       href="https://fonts.googleapis.com/css2?family=Overpass+Mono:wght@300;400;600&display=swap"
       rel="stylesheet"
@@ -57,11 +57,21 @@
         <h1 class="page-title">selecionar localização</h1>
       </div>
       <div class="instruction-text">
-        posicione o local desejado dentro do quadrado
+        posicione o local desejado no centro do mapa
       </div>
       <div class="map-container">
         <div id="map"></div>
-        <div class="map-overlay"></div>
+        <div id="sizeSelectorContainer" class="size-selector-container">
+          <button class="size-option" data-size="small" title="Pequeno">
+            P
+          </button>
+          <button class="size-option active" data-size="medium" title="Médio">
+            M
+          </button>
+          <button class="size-option" data-size="large" title="Grande">
+            G
+          </button>
+        </div>
       </div>
       <div class="map-controls">
         <div class="location-display" onclick="promptForCoordinates()">
@@ -87,6 +97,12 @@
           </button>
           <h1 class="page-title">pré-visualização 3D</h1>
           <div class="header-controls">
+            <div class="cm-size-selector">
+              <span class="cm-label">Tamanho (cm):</span>
+              <div class="cm-options" id="cmSizeOptions">
+                <!-- Options will be populated by JavaScript -->
+              </div>
+            </div>
             <div class="color-swatches">
               <div
                 class="swatch"

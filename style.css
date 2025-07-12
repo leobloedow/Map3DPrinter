@@ -118,7 +118,6 @@ body {
   left: 0;
   right: 0;
   height: auto;
-  /* Adjusted for multiple rows */
   background: #f8f9fa;
   border-bottom: 1px solid #e9ecef;
   z-index: 1001;
@@ -171,6 +170,54 @@ body {
   display: flex;
   align-items: center;
   gap: 15px;
+}
+
+.cm-size-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: rgba(255, 255, 255, 0.9);
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+
+.cm-label {
+  font-family: "Overpass Mono", monospace;
+  font-size: 12px;
+  color: #333;
+  white-space: nowrap;
+}
+
+.cm-options {
+  display: flex;
+  gap: 5px;
+}
+
+.cm-option {
+  font-family: "Overpass Mono", monospace;
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background-color: transparent;
+  cursor: pointer;
+  font-size: 11px;
+  transition: background-color 0.2s, color 0.2s;
+  color: #555;
+  min-width: 35px;
+  text-align: center;
+}
+
+.cm-option:hover {
+  background-color: #f0f0f0;
+  color: #000;
+}
+
+.cm-option.active {
+  background-color: #8000ff;
+  color: white;
+  font-weight: 600;
+  border-color: #6a00d9;
 }
 
 .color-swatches {
@@ -255,20 +302,52 @@ body {
 #map {
   width: 100%;
   height: 100%;
+  cursor: grab;
+}
+#map:active {
+  cursor: grabbing;
 }
 
-.map-overlay {
+/* Custom Size Selector Styles */
+.size-selector-container {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 200px;
-  height: 200px;
-  transform: translate(-50%, -50%);
-  border: 3px solid #8000ff;
-  background: rgba(68, 68, 255, 0.1);
-  pointer-events: none;
   z-index: 1001;
-  box-shadow: 0 0 20px rgba(68, 68, 255, 0.3);
+  background-color: rgba(255, 255, 255, 0.9);
+  padding: 5px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  border: 1px solid #ddd;
+  display: flex;
+  gap: 5px;
+  /* Position is set by JS */
+  transform: translateX(-50%);
+  transition: top 0.1s ease-out, left 0.1s ease-out;
+}
+
+.size-option {
+  font-family: "Overpass Mono", monospace;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background-color: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.2s, color 0.2s;
+  color: #555;
+  width: 40px; /* Give buttons a fixed width */
+  text-align: center;
+}
+
+.size-option:hover {
+  background-color: #f0f0f0;
+  color: #000;
+}
+
+.size-option.active {
+  background-color: #8000ff;
+  color: white;
+  font-weight: 600;
+  border-color: #6a00d9;
 }
 
 .map-controls {
@@ -344,7 +423,6 @@ body {
 /* 3D Preview Page Styles */
 #previewContainer {
   position: absolute;
-  /* The 'top' value is now set dynamically by JavaScript */
   left: 0;
   right: 0;
   bottom: 0;
@@ -531,21 +609,22 @@ body {
     gap: 10px;
   }
 
-  .map-overlay {
-    width: 150px;
-    height: 150px;
-  }
-
   .instruction-text {
     font-size: 12px;
     padding: 8px 16px;
     top: 140px;
-    /* Adjust for taller header on mobile */
   }
 
   .map-container {
     top: 130px;
-    /* Adjust for taller header on mobile */
+  }
+
+  .size-selector-container {
+    top: auto;
+    bottom: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    flex-direction: row;
   }
 
   .header-controls {
@@ -562,5 +641,21 @@ body {
   #previewPage .header-row {
     flex-direction: column;
     gap: 15px;
+  }
+
+  .cm-size-selector {
+    order: 1;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .cm-options {
+    gap: 3px;
+  }
+
+  .cm-option {
+    padding: 4px 8px;
+    font-size: 10px;
+    min-width: 30px;
   }
 }

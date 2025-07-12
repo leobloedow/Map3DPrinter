@@ -1,5 +1,6 @@
 // --- Global State ---
 let map;
+let selectionRectangle;
 let selectedBounds = null;
 let geoJsonData = null;
 let three = {
@@ -17,12 +18,28 @@ let three = {
 };
 const originalColors = new Map();
 
-// --- NEW: State for map position ---
+// --- Map State ---
 let isFirstMapLoad = true;
 let lastMapState = {
-  center: [-30.0346, -51.2177], // Default location
+  center: [-30.0346, -51.2177], // Default to Porto Alegre
   zoom: 13,
 };
+const SELECTION_SIZES = {
+  // In degrees latitude
+  small: 0.005, // ~550m
+  medium: 0.015, // ~1.6km (was 2.2km)
+  large: 0.05, // ~5.5km
+};
+
+// CM size options for each map size
+const CM_SIZE_OPTIONS = {
+  small: [5, 10], // P size supports 5x5cm and 10x10cm
+  medium: [5, 10, 20], // M size supports 5x5, 10x10, and 20x20cm
+  large: [10, 20], // G size supports 10x10 and 20x20cm
+};
+
+let currentSelectionSize = "medium";
+let currentCmSize = 10; // Default cm size
 
 // --- Page Navigation ---
 function showPage(pageId) {
@@ -37,7 +54,46 @@ function showMapPage() {
 
 function showPreviewPage() {
   showPage("previewPage");
-  setTimeout(() => init3DPreview(), 100);
+  setTimeout(() => {
+    setupCmSizeSelector();
+    init3DPreview();
+  }, 100);
+}
+
+function setupCmSizeSelector() {
+  const container = document.getElementById("cmSizeOptions");
+  if (!container) return;
+  
+  container.innerHTML = "";
+  
+  const availableSizes = CM_SIZE_OPTIONS[currentSelectionSize];
+  
+  availableSizes.forEach(size => {
+    const button = document.createElement("button");
+    button.className = "cm-option";
+    button.textContent = `${size}x${size}`;
+    button.dataset.size = size;
+    button.title = `${size}x${size} cm`;
+    
+    if (size === currentCmSize) {
+      button.classList.add("active");
+    }
+    
+    button.addEventListener("click", () => {
+      currentCmSize = size;
+      document.querySelectorAll(".cm-option").forEach(btn => btn.classList.remove("active"));
+      button.classList.add("active");
+      // No need to update 3D preview - it stays at fixed scale for visualization
+    });
+    
+    container.appendChild(button);
+  });
+}
+
+function changeCmSize(size) {
+  currentCmSize = size;
+  setupCmSizeSelector();
+  // No need to update 3D preview - it stays at fixed scale for visualization
 }
 
 function goBackToMain() {
@@ -45,6 +101,7 @@ function goBackToMain() {
   if (map) {
     map.remove();
     map = null;
+    selectionRectangle = null;
   }
 }
 
@@ -116,44 +173,59 @@ function showLoader(show, text = "Carregando...") {
 function initializeMap() {
   if (map) map.remove();
 
-  // Always initialize with the last known state.
-  // On first load, this will be the default.
-  map = L.map("map").setView(lastMapState.center, lastMapState.zoom);
+  map = L.map("map", {
+    center: lastMapState.center,
+    zoom: lastMapState.zoom,
+    zoomControl: false,
+  });
+
+  L.control.zoom({ position: "bottomright" }).addTo(map);
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "© OpenStreetMap contributors",
   }).addTo(map);
 
-  // Using 'moveend' is slightly more performant than 'move'
-  map.on("moveend", updateSelectedBounds);
-  map.on("zoomend", updateSelectedBounds);
+  // Add event listeners
+  map.on("move", updateSelectionArea);
+  map.on("zoomend", updateSelectionArea);
+  map.on("load", updateSelectionArea); // Handles initial load and setView
 
-  // Only try to get user's location on the very first time.
+  // Setup custom size selector buttons
+  document.querySelectorAll(".size-option").forEach((button) => {
+    button.addEventListener("click", () => {
+      currentSelectionSize = button.dataset.size;
+      document
+        .querySelectorAll(".size-option")
+        .forEach((btn) => btn.classList.remove("active"));
+      button.classList.add("active");
+      
+      // Update cm size to first available option for new map size
+      const availableSizes = CM_SIZE_OPTIONS[currentSelectionSize];
+      if (availableSizes && availableSizes.length > 0) {
+        currentCmSize = availableSizes[0];
+      }
+      
+      updateSelectionArea();
+    });
+  });
+
   if (isFirstMapLoad) {
-    isFirstMapLoad = false; // Prevent this from running again
+    isFirstMapLoad = false;
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          // This setView will trigger moveend/zoomend, which calls updateSelectedBounds
-          // and saves the new state.
           map.setView([pos.coords.latitude, pos.coords.longitude], 17);
         },
         () => {
-          // Geolocation failed or denied, just update the bounds display
-          // for the default location.
-          updateSelectedBounds();
+          updateSelectionArea();
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
       );
     } else {
-      // Geolocation not supported, update bounds for default location.
-      updateSelectedBounds();
+      updateSelectionArea();
     }
   } else {
-    // If not the first load, we've already set the view from lastMapState.
-    // We still need to call updateSelectedBounds once to make sure the
-    // overlay and text display are in sync immediately.
-    updateSelectedBounds();
+    updateSelectionArea();
   }
 }
 
@@ -189,39 +261,70 @@ function searchLocation() {
     .finally(() => showLoader(false));
 }
 
-function updateSelectedBounds() {
+function updateSelectionArea() {
   if (!map) return;
-  const mapContainer = document.getElementById("map");
-  const overlay = document.querySelector(".map-overlay");
-  const containerRect = mapContainer.getBoundingClientRect();
-  const overlayRect = overlay.getBoundingClientRect();
-  const topLeftPoint = L.point(
-    overlayRect.left - containerRect.left,
-    overlayRect.top - containerRect.top
-  );
-  const bottomRightPoint = L.point(
-    overlayRect.right - containerRect.left,
-    overlayRect.bottom - containerRect.top
-  );
-  selectedBounds = {
-    topLeft: map.containerPointToLatLng(topLeftPoint),
-    bottomRight: map.containerPointToLatLng(bottomRightPoint),
-    center: map.getCenter(),
-  };
 
-  // Update the last known state
+  const center = map.getCenter();
+  const latDelta = SELECTION_SIZES[currentSelectionSize];
+  const halfLatDelta = latDelta / 2;
+
+  const aspectRatio = Math.cos((center.lat * Math.PI) / 180);
+  const lonDelta = latDelta / aspectRatio;
+  const halfLonDelta = lonDelta / 2;
+
+  const bounds = L.latLngBounds(
+    [center.lat - halfLatDelta, center.lng - halfLonDelta],
+    [center.lat + halfLatDelta, center.lng + halfLonDelta]
+  );
+
+  if (selectionRectangle) {
+    selectionRectangle.setBounds(bounds);
+  } else {
+    selectionRectangle = L.rectangle(bounds, {
+      color: "#8000ff",
+      weight: 3,
+      fillColor: "#4444ff",
+      fillOpacity: 0.1,
+      interactive: false,
+    }).addTo(map);
+  }
+
+  selectedBounds = selectionRectangle.getBounds();
   lastMapState = {
-    center: map.getCenter(),
+    center: center,
     zoom: map.getZoom(),
   };
 
   updateLocationDisplay();
+  updateSelectorPosition();
+}
+
+function updateSelectorPosition() {
+  if (!map || !selectionRectangle) return;
+
+  const selector = document.getElementById("sizeSelectorContainer");
+  const mapContainer = document.getElementById("map");
+  const mapRect = mapContainer.getBoundingClientRect();
+
+  const south = selectedBounds.getSouth();
+  const center = selectedBounds.getCenter();
+  const bottomPoint = map.latLngToContainerPoint([south, center.lng]);
+
+  let topPos = bottomPoint.y + 15;
+
+  const selectorHeight = selector.offsetHeight;
+  if (topPos + selectorHeight > mapRect.height) {
+    topPos = mapRect.height - selectorHeight - 15;
+  }
+
+  selector.style.top = `${topPos}px`;
+  selector.style.left = `${bottomPoint.x}px`;
 }
 
 function updateLocationDisplay() {
   const locationDiv = document.getElementById("selectedLocation");
   if (selectedBounds) {
-    const center = selectedBounds.center;
+    const center = selectedBounds.getCenter();
     locationDiv.textContent = `${center.lat.toFixed(4)}, ${center.lng.toFixed(
       4
     )}`;
@@ -234,13 +337,16 @@ function confirmLocation() {
   showLoader(true, "construindo o modelo 3D...");
   confirmButton.disabled = true;
   confirmButton.textContent = "carregando...";
-  const { topLeft, bottomRight } = selectedBounds;
+
+  const northEast = selectedBounds.getNorthEast();
+  const southWest = selectedBounds.getSouthWest();
+
   const overpassQuery = `
     [out:json][timeout:25];
     (
-      way["building"](${bottomRight.lat},${topLeft.lng},${topLeft.lat},${bottomRight.lng});
-      relation["building"](${bottomRight.lat},${topLeft.lng},${topLeft.lat},${bottomRight.lng});
-      way["highway"](${bottomRight.lat},${topLeft.lng},${topLeft.lat},${bottomRight.lng});
+      way["building"](${southWest.lat},${southWest.lng},${northEast.lat},${northEast.lng});
+      relation["building"](${southWest.lat},${southWest.lng},${northEast.lat},${northEast.lng});
+      way["highway"](${southWest.lat},${southWest.lng},${northEast.lat},${northEast.lng});
     );
     out geom;
   `;
@@ -255,6 +361,17 @@ function confirmLocation() {
     })
     .then((data) => {
       geoJsonData = osmtogeojson(data);
+
+      // BUG FIX: Check for incomplete data
+      const areaSize = SELECTION_SIZES[currentSelectionSize];
+      if (geoJsonData.features.length < 5 && areaSize > 0.01) {
+        showMessageBox(
+          "Dados Incompletos?",
+          "Foram encontrados poucos detalhes na área selecionada. O mapa pode não ter carregado completamente. Tente mover o mapa, aguarde os detalhes aparecerem e confirme novamente."
+        );
+        throw new Error("Potentially incomplete data");
+      }
+
       if (geoJsonData.features.length === 0) {
         showMessageBox(
           "Nenhum Dado Encontrado",
@@ -265,13 +382,12 @@ function confirmLocation() {
       showPreviewPage();
     })
     .catch((error) => {
-      // Check if the error is the one we are handling gracefully
-      if (error.message.includes("No features found")) {
-        // The user has already been shown a specific message box.
-        // We can log this for information, but it's not an unexpected error.
-        console.log("Handled case: No features found in the selected area.");
+      if (
+        error.message.includes("No features found") ||
+        error.message.includes("Potentially incomplete data")
+      ) {
+        console.log(`Handled case: ${error.message}`);
       } else {
-        // For other, unexpected errors, log them and inform the user.
         console.error("Erro ao buscar dados:", error);
         showMessageBox("Erro", `Falha ao buscar dados: ${error.message}.`);
       }
@@ -309,15 +425,16 @@ function init3DPreview() {
   );
   three.scene.add(three.modelGroup);
 
+  const centerLatLng = selectedBounds.getCenter();
   const corner1 = latLonToVector3(
-    selectedBounds.topLeft.lat,
-    selectedBounds.topLeft.lng,
-    selectedBounds.center
+    selectedBounds.getNorthWest().lat,
+    selectedBounds.getNorthWest().lng,
+    centerLatLng
   );
   const corner2 = latLonToVector3(
-    selectedBounds.bottomRight.lat,
-    selectedBounds.bottomRight.lng,
-    selectedBounds.center
+    selectedBounds.getSouthEast().lat,
+    selectedBounds.getSouthEast().lng,
+    centerLatLng
   );
   const worldWidth = Math.abs(corner1.x - corner2.x);
   const worldDepth = Math.abs(corner1.z - corner2.z);
@@ -383,10 +500,9 @@ function init3DPreview() {
   const maxHeight = drawFeatures(clipBounds, plateThickness);
   createWalls(worldWidth, worldDepth, maxHeight, plateThickness, 3);
 
-  // Scale the model to 20cm and then frame it
   const initialBBox = new THREE.Box3().setFromObject(three.modelGroup);
   const initialSize = initialBBox.getSize(new THREE.Vector3());
-  const targetSize = 200;
+  const targetSize = 200; // Fixed preview size for consistent visualization
   const maxInitialDim = Math.max(initialSize.x, initialSize.z);
   const scaleFactor = maxInitialDim > 0 ? targetSize / maxInitialDim : 1;
   three.modelGroup.scale.set(scaleFactor, scaleFactor, scaleFactor);
@@ -399,7 +515,6 @@ function init3DPreview() {
   const maxDim = Math.max(size.x, size.y, size.z);
   const fov = three.camera.fov * (Math.PI / 180);
 
-  // Calculate the distance required to fit the object in the view
   let cameraDist;
   if (three.camera.aspect < 1) {
     cameraDist = maxDim / 2 / Math.tan(fov / 2) / three.camera.aspect;
@@ -407,18 +522,16 @@ function init3DPreview() {
     cameraDist = maxDim / 2 / Math.tan(fov / 2);
   }
 
-  const padding = 1.3; // Increased padding slightly for a better angled view
+  const padding = 1.3;
   const distance = cameraDist * padding;
-  const angle = Math.PI / 4; // 45 degrees
+  const angle = Math.PI / 4;
 
-  // Position the camera at an angle
   three.camera.position.set(
     center.x,
     center.y + distance * Math.sin(angle),
     center.z + distance * Math.cos(angle)
   );
 
-  // Look at the center of the model
   three.camera.lookAt(center);
   three.controls.target.copy(center);
   three.controls.update();
@@ -449,6 +562,7 @@ function destroy3DPreview() {
   };
   geoJsonData = null;
   originalColors.clear();
+  selectionRectangle = null;
 }
 
 function onWindowResize() {
@@ -527,7 +641,7 @@ function createWalls(
 }
 
 function drawFeatures(clipBounds, plateThickness) {
-  const center = selectedBounds.center;
+  const center = selectedBounds.getCenter();
   let maxHeight = 0;
   const buildingMaterial = new THREE.MeshStandardMaterial({
     color: 0xffffff,
@@ -819,10 +933,9 @@ function downloadSTL() {
     return showMessageBox("Erro", "A cena 3D não foi carregada.");
   }
 
-  // --- ROBUST STL EXPORT ---
+  // Clone the original, unscaled geometry for export
   const exportGroup = new THREE.Group();
 
-  // Add base plate, buildings, and roads. Walls are intentionally excluded.
   if (three.basePlate) {
     exportGroup.add(three.basePlate.clone());
   }
@@ -837,7 +950,19 @@ function downloadSTL() {
     exportGroup.add(roadsClone);
   }
 
-  exportGroup.scale.copy(three.modelGroup.scale);
+  // Remove any scaling from the preview
+  exportGroup.scale.set(1, 1, 1);
+  exportGroup.updateMatrixWorld(true, true);
+
+  // Calculate the bounding box of the unscaled export group
+  const bbox = new THREE.Box3().setFromObject(exportGroup);
+  const size = bbox.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.z);
+  const targetSizeMm = currentCmSize * 10; // cm to mm
+  const exportScaleFactor = maxDim > 0 ? targetSizeMm / maxDim : 1;
+
+  // Apply the correct scale for export
+  exportGroup.scale.set(exportScaleFactor, exportScaleFactor, exportScaleFactor);
   exportGroup.updateMatrixWorld(true, true);
 
   const geometriesToMerge = [];
