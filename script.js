@@ -12,11 +12,20 @@ let three = {
   light: null,
   modelGroup: null,
   basePlate: null,
+  baseCube: null,
   wallsGroup: null,
   buildingsGroup: null,
   roadsGroup: null,
 };
 const originalColors = new Map();
+let currentPlateColor = 0xffffff; // Track current plate color
+let backgroundTransition = {
+  isActive: false,
+  startColor: 0xffffff,
+  targetColor: 0xffffff,
+  progress: 0,
+  duration: 1000, // 1 second transition
+};
 
 // --- Map State ---
 let isFirstMapLoad = true;
@@ -40,6 +49,7 @@ const CM_SIZE_OPTIONS = {
 
 let currentSelectionSize = "medium";
 let currentCmSize = 10; // Default cm size
+let currentMapScale = 100; // Default map scale (100%)
 
 // --- Page Navigation ---
 function showPage(pageId) {
@@ -65,29 +75,31 @@ function showPreviewPage() {
 function setupCmSizeSelector() {
   const container = document.getElementById("cmSizeOptions");
   if (!container) return;
-  
+
   container.innerHTML = "";
-  
+
   const availableSizes = CM_SIZE_OPTIONS[currentSelectionSize];
-  
-  availableSizes.forEach(size => {
+
+  availableSizes.forEach((size) => {
     const button = document.createElement("button");
     button.className = "cm-option";
     button.textContent = `${size}x${size}`;
     button.dataset.size = size;
     button.title = `${size}x${size} cm`;
-    
+
     if (size === currentCmSize) {
       button.classList.add("active");
     }
-    
+
     button.addEventListener("click", () => {
       currentCmSize = size;
-      document.querySelectorAll(".cm-option").forEach(btn => btn.classList.remove("active"));
+      document
+        .querySelectorAll(".cm-option")
+        .forEach((btn) => btn.classList.remove("active"));
       button.classList.add("active");
       // No need to update 3D preview - it stays at fixed scale for visualization
     });
-    
+
     container.appendChild(button);
   });
 }
@@ -171,6 +183,160 @@ function showLoader(show, text = "Carregando...") {
     : "none";
 }
 
+function updateMapScale(scaleValue) {
+  currentMapScale = parseInt(scaleValue);
+  
+  // Update the display value
+  const scaleValueElement = document.getElementById("scaleValue");
+  if (scaleValueElement) {
+    scaleValueElement.textContent = `${currentMapScale}%`;
+  }
+  
+  // Update the 3D model if it exists
+  if (three.modelGroup && three.buildingsGroup && three.roadsGroup) {
+    const scaleFactor = currentMapScale / 100;
+    
+    // Scale buildings and roads from their center (only X and Z, keep Y unchanged)
+    if (three.buildingsGroup) {
+      three.buildingsGroup.scale.set(scaleFactor, 1, scaleFactor);
+    }
+    if (three.roadsGroup) {
+      three.roadsGroup.scale.set(scaleFactor, 1, scaleFactor);
+    }
+    
+    // Update the model group matrix
+    three.modelGroup.updateMatrixWorld(true);
+  }
+}
+
+// Create gradient background based on plate color
+function createColorDependentGradient(plateColor) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 2;
+  canvas.height = 512;
+  const context = canvas.getContext("2d");
+
+  // Convert hex color to RGB
+  const r = (plateColor >> 16) & 255;
+  const g = (plateColor >> 8) & 255;
+  const b = plateColor & 255;
+
+  // Gradual color adjustment for beige/tan colors (no abrupt changes)
+  let adjustedR = r;
+  let adjustedG = g;
+  let adjustedB = b;
+
+  // Calculate how "beige-like" the color is (0 to 1)
+  const redDominance = Math.max(0, (r - g) / 255);
+  const greenPresence = Math.max(0, (g - b) / 255);
+  const beigeFactor = Math.min(1, redDominance * greenPresence);
+
+  // Apply gradual adjustments based on beige factor
+  if (beigeFactor > 0.1) {
+    const adjustmentStrength = beigeFactor * 0.6; // Max 60% adjustment
+    adjustedR = r - (r - g) * adjustmentStrength * 0.3; // Gradually reduce red dominance
+    adjustedG = g + (255 - g) * adjustmentStrength * 0.1; // Slightly boost green
+    adjustedB = b + (255 - b) * adjustmentStrength * 0.2; // Boost blue for neutrality
+  }
+
+  // Create gradient colors based on adjusted plate color
+  const topColor = `rgb(${Math.min(255, adjustedR + 80)}, ${Math.min(
+    255,
+    adjustedG + 80
+  )}, ${Math.min(255, adjustedB + 120)})`;
+  const middleColor = `rgb(${Math.min(255, adjustedR + 40)}, ${Math.min(
+    255,
+    adjustedG + 40
+  )}, ${Math.min(255, adjustedB + 60)})`;
+  const bottomColor = `rgb(${Math.max(0, adjustedR - 20)}, ${Math.max(
+    0,
+    adjustedG - 20
+  )}, ${Math.max(0, adjustedB + 40)})`;
+
+  const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
+  gradient.addColorStop(0, topColor); // Lighter version at top
+  gradient.addColorStop(0.3, middleColor); // Medium tone in middle
+  gradient.addColorStop(0.7, bottomColor); // Darker version at bottom
+  gradient.addColorStop(
+    1,
+    `rgb(${Math.max(0, adjustedR - 40)}, ${Math.max(
+      0,
+      adjustedG - 40
+    )}, ${Math.max(0, adjustedB + 20)})`
+  ); // Even darker at very bottom
+
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.mapping = THREE.EquirectangularReflectionMapping;
+  return texture;
+}
+
+// Smoothly transition background to new color
+function transitionBackgroundToColor(targetColor) {
+  if (!three.scene) return;
+
+  // Don't start a new transition if one is already active
+  if (backgroundTransition.isActive) {
+    // Update the target color for the current transition
+    backgroundTransition.targetColor = targetColor;
+    return;
+  }
+
+  backgroundTransition.isActive = true;
+  backgroundTransition.startColor = currentPlateColor;
+  backgroundTransition.targetColor = targetColor;
+  backgroundTransition.progress = 0;
+  backgroundTransition.startTime = Date.now();
+
+  // Start the transition animation
+  animateBackgroundTransition();
+}
+
+// Animate background transition
+function animateBackgroundTransition() {
+  if (!backgroundTransition.isActive || !three.scene) return;
+
+  const elapsed = Date.now() - (backgroundTransition.startTime || Date.now());
+  backgroundTransition.progress = Math.min(
+    elapsed / backgroundTransition.duration,
+    1
+  );
+
+  // Smoother easing function (ease-out cubic)
+  const easeProgress = 1 - Math.pow(1 - backgroundTransition.progress, 3);
+
+  // Interpolate between start and target colors with sub-pixel precision
+  const startR = (backgroundTransition.startColor >> 16) & 255;
+  const startG = (backgroundTransition.startColor >> 8) & 255;
+  const startB = backgroundTransition.startColor & 255;
+
+  const targetR = (backgroundTransition.targetColor >> 16) & 255;
+  const targetG = (backgroundTransition.targetColor >> 8) & 255;
+  const targetB = backgroundTransition.targetColor & 255;
+
+  const currentR = Math.round(startR + (targetR - startR) * easeProgress);
+  const currentG = Math.round(startG + (targetG - startG) * easeProgress);
+  const currentB = Math.round(startB + (targetB - startB) * easeProgress);
+
+  const currentColor = (currentR << 16) | (currentG << 8) | currentB;
+
+  // Update background with interpolated color
+  three.scene.background = createColorDependentGradient(currentColor);
+
+  if (backgroundTransition.progress < 1) {
+    // Use a more controlled frame rate to prevent flickering
+    setTimeout(() => {
+      requestAnimationFrame(animateBackgroundTransition);
+    }, 16); // ~60fps
+  } else {
+    // Transition complete
+    backgroundTransition.isActive = false;
+    currentPlateColor = backgroundTransition.targetColor;
+  }
+}
+
 // --- Map Logic (Leaflet) ---
 function initializeMap() {
   if (map) map.remove();
@@ -200,7 +366,7 @@ function initializeMap() {
         .querySelectorAll(".size-option")
         .forEach((btn) => btn.classList.remove("active"));
       button.classList.add("active");
-      
+
       // Update cm size to first available option for new map size
       const availableSizes = CM_SIZE_OPTIONS[currentSelectionSize];
       if (availableSizes && availableSizes.length > 0) {
@@ -412,16 +578,18 @@ function init3DPreview() {
   }
 
   three.scene = new THREE.Scene();
-  three.scene.background = new THREE.Color(0xddeeff);
+
+  // Create gradient sky background based on plate color
+  three.scene.background = createColorDependentGradient(currentPlateColor);
+
   const aspect = container.clientWidth / container.clientHeight;
   three.camera = new THREE.PerspectiveCamera(50, aspect, 1, 10000);
 
   three.modelGroup = new THREE.Group();
-  three.wallsGroup = new THREE.Group();
+  three.wallsGroup = new THREE.Group(); // Keep for compatibility but don't use
   three.buildingsGroup = new THREE.Group();
   three.roadsGroup = new THREE.Group();
   three.modelGroup.add(
-    three.wallsGroup,
     three.buildingsGroup,
     three.roadsGroup
   );
@@ -496,13 +664,36 @@ function init3DPreview() {
   );
   three.basePlate.position.y = 0;
   three.basePlate.receiveShadow = true;
+  three.basePlate.castShadow = true;
   three.modelGroup.add(three.basePlate);
   originalColors.set(three.basePlate, three.basePlate.material.color.getHex());
 
-  const maxHeight = drawFeatures(clipBounds, plateThickness);
-  createWalls(worldWidth, worldDepth, maxHeight, plateThickness, 3);
+  // Create base cube under the plate
+  const cubeHeight = 2000; // Much taller cube extending downward
+  const cubeGap = 100; // Gap between plate and cube for floating effect
+  const cubeMaterial = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+  });
+  three.baseCube = new THREE.Mesh(
+    new THREE.BoxGeometry(worldWidth, cubeHeight, worldDepth),
+    cubeMaterial
+  );
+  three.baseCube.position.y = -plateThickness / 2 - cubeGap - cubeHeight / 2; // Position below the plate with gap
+  three.baseCube.castShadow = true;
+  three.baseCube.receiveShadow = true;
+  three.modelGroup.add(three.baseCube);
+  originalColors.set(three.baseCube, three.baseCube.material.color.getHex());
 
-  const initialBBox = new THREE.Box3().setFromObject(three.modelGroup);
+  const maxHeight = drawFeatures(clipBounds, plateThickness);
+  // Walls removed - no longer creating walls
+
+  // Create a temporary group for camera calculations (excluding the cube)
+  const cameraGroup = new THREE.Group();
+  cameraGroup.add(three.basePlate.clone());
+  cameraGroup.add(three.buildingsGroup.clone());
+  cameraGroup.add(three.roadsGroup.clone());
+
+  const initialBBox = new THREE.Box3().setFromObject(cameraGroup);
   const initialSize = initialBBox.getSize(new THREE.Vector3());
   const targetSize = 200; // Fixed preview size for consistent visualization
   const maxInitialDim = Math.max(initialSize.x, initialSize.z);
@@ -510,7 +701,10 @@ function init3DPreview() {
   three.modelGroup.scale.set(scaleFactor, scaleFactor, scaleFactor);
   three.modelGroup.updateMatrixWorld(true);
 
-  const scaledBBox = new THREE.Box3().setFromObject(three.modelGroup);
+  // Recalculate bounding box after scaling (still excluding cube)
+  cameraGroup.scale.set(scaleFactor, scaleFactor, scaleFactor);
+  cameraGroup.updateMatrixWorld(true);
+  const scaledBBox = new THREE.Box3().setFromObject(cameraGroup);
   const center = scaledBBox.getCenter(new THREE.Vector3());
   const size = scaledBBox.getSize(new THREE.Vector3());
 
@@ -558,6 +752,7 @@ function destroy3DPreview() {
     animationFrameId: null,
     modelGroup: null,
     basePlate: null,
+    baseCube: null,
     wallsGroup: null,
     buildingsGroup: null,
     roadsGroup: null,
@@ -941,14 +1136,21 @@ function downloadSTL() {
   if (three.basePlate) {
     exportGroup.add(three.basePlate.clone());
   }
+  // Note: baseCube is intentionally excluded from export to ignore the cube below the plate
   if (three.buildingsGroup) {
     const buildingsClone = three.buildingsGroup.clone(true);
     buildingsClone.userData.isBuildings = true;
+    // Apply the current map scale to buildings (only X and Z, keep Y unchanged)
+    const scaleFactor = currentMapScale / 100;
+    buildingsClone.scale.set(scaleFactor, 1, scaleFactor);
     exportGroup.add(buildingsClone);
   }
   if (three.roadsGroup) {
     const roadsClone = three.roadsGroup.clone(true);
     roadsClone.userData.isRoads = true;
+    // Apply the current map scale to roads (only X and Z, keep Y unchanged)
+    const scaleFactor = currentMapScale / 100;
+    roadsClone.scale.set(scaleFactor, 1, scaleFactor);
     exportGroup.add(roadsClone);
   }
 
@@ -964,7 +1166,11 @@ function downloadSTL() {
   const exportScaleFactor = maxDim > 0 ? targetSizeMm / maxDim : 1;
 
   // Apply the correct scale for export
-  exportGroup.scale.set(exportScaleFactor, exportScaleFactor, exportScaleFactor);
+  exportGroup.scale.set(
+    exportScaleFactor,
+    exportScaleFactor,
+    exportScaleFactor
+  );
   exportGroup.updateMatrixWorld(true, true);
 
   const geometriesToMerge = [];
@@ -1037,8 +1243,14 @@ function downloadSTL() {
   document.body.removeChild(link);
 }
 
+function downloadWallsSTL() {
+  return showMessageBox("Erro", "As paredes foram removidas do modelo.");
+}
+
 function changeModelColor(color) {
   if (!three.modelGroup) return;
+
+  // Update model colors immediately
   three.modelGroup.traverse((object) => {
     if (object.isMesh) {
       if (!originalColors.has(object)) {
@@ -1047,15 +1259,27 @@ function changeModelColor(color) {
       object.material.color.set(color);
     }
   });
+
+  // Smoothly transition background gradient to match plate color
+  if (three.scene) {
+    transitionBackgroundToColor(color);
+  }
 }
 
 function resetModelColor() {
   if (!three.modelGroup) return;
+
+  // Reset model colors immediately
   three.modelGroup.traverse((object) => {
     if (object.isMesh && originalColors.has(object)) {
       object.material.color.setHex(originalColors.get(object));
     }
   });
+
+  // Smoothly transition background gradient to default (white-based)
+  if (three.scene) {
+    transitionBackgroundToColor(0xffffff);
+  }
 }
 
 // Initial setup

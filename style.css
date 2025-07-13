@@ -252,6 +252,65 @@ body {
   color: #333;
 }
 
+/* Map Scale Slider Styles */
+.map-scale-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: rgba(255, 255, 255, 0.9);
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+
+.scale-label {
+  font-family: "Overpass Mono", monospace;
+  font-size: 12px;
+  color: #333;
+  white-space: nowrap;
+}
+
+.scale-slider {
+  width: 80px;
+  height: 4px;
+  border-radius: 2px;
+  background: #ddd;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.scale-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #8000ff;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.scale-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #8000ff;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  border: none;
+}
+
+.scale-value {
+  font-family: "Overpass Mono", monospace;
+  font-size: 12px;
+  color: #333;
+  min-width: 35px;
+  text-align: center;
+}
+
 /* Map Page Styles */
 #mapPage .page-header {
   flex-direction: row;
@@ -656,6 +715,26 @@ body {
   .cm-option {
     padding: 4px 8px;
     font-size: 10px;
+    min-width: 30px;
+  }
+
+  .map-scale-selector {
+    order: 2;
+    width: 100%;
+    justify-content: center;
+    padding: 6px 10px;
+  }
+
+  .scale-slider {
+    width: 60px;
+  }
+
+  .scale-label {
+    font-size: 11px;
+  }
+
+  .scale-value {
+    font-size: 11px;
     min-width: 30px;
   }
 }

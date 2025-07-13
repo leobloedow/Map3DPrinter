@@ -103,6 +103,19 @@
                 <!-- Options will be populated by JavaScript -->
               </div>
             </div>
+            <div class="map-scale-selector">
+              <span class="scale-label">Escala do mapa:</span>
+              <input 
+                type="range" 
+                id="mapScaleSlider" 
+                min="50" 
+                max="100" 
+                value="100" 
+                class="scale-slider"
+                oninput="updateMapScale(this.value)"
+              />
+              <span class="scale-value" id="scaleValue">100%</span>
+            </div>
             <div class="color-swatches">
               <div
                 class="swatch"
